@@ -6,6 +6,8 @@ export class AudioController {
   private audioContext: AudioContext | null = null;
   private orchestrator: BurstOrchestrator | null = null;
   private isPlaying = false;
+  private currentMaskCenter = 2500; // Default center frequency
+  private currentBandwidth = 0.58; // Default bandwidth in octaves (roughly 2-3kHz)
 
   private async initializeAudio(): Promise<void> {
     if (!this.audioContext) {
@@ -70,12 +72,22 @@ export class AudioController {
   }
 
   updateMaskCenterFrequency(centerFreq: number): void {
+    this.currentMaskCenter = centerFreq;
+    this.updateMaskPattern();
+  }
+
+  updateMaskBandwidth(bandwidth: number): void {
+    this.currentBandwidth = bandwidth;
+    this.updateMaskPattern();
+  }
+
+  private updateMaskPattern(): void {
     if (!this.orchestrator) return;
     
-    // Create new pattern with mask centered at the specified frequency
-    // Using a bandwidth of roughly 0.58 octaves (like the original 2-3kHz)
-    const lowerBound = centerFreq / 1.5;
-    const upperBound = centerFreq * 1.5;
+    // Calculate bounds based on bandwidth in octaves
+    const halfBandwidth = this.currentBandwidth / 2;
+    const lowerBound = this.currentMaskCenter / Math.pow(2, halfBandwidth);
+    const upperBound = this.currentMaskCenter * Math.pow(2, halfBandwidth);
     
     const newPattern: BurstPattern = {
       steps: [

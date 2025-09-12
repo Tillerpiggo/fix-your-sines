@@ -15,8 +15,8 @@ export const generateBaseFrequencies = (minFreq: number, maxFreq: number, count:
   return frequencies;
 };
 
-// Default starting frequencies
-export const baseFrequencies = generateBaseFrequencies(100, 10000, 100);
+// Default starting frequencies from 40Hz to 14kHz
+export const baseFrequencies = generateBaseFrequencies(40, 14000, 100);
 
 // Default pattern: alternating 2-3kHz excluded/included
 export const defaultPattern: BurstPattern = {
