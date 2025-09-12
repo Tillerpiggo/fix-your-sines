@@ -69,6 +69,37 @@ export class AudioController {
     }
   }
 
+  updateMaskCenterFrequency(centerFreq: number): void {
+    if (!this.orchestrator) return;
+    
+    // Create new pattern with mask centered at the specified frequency
+    // Using a bandwidth of roughly 0.58 octaves (like the original 2-3kHz)
+    const lowerBound = centerFreq / 1.5;
+    const upperBound = centerFreq * 1.5;
+    
+    const newPattern: BurstPattern = {
+      steps: [
+        {
+          // Step 1: Exclude the frequency band for all bursts
+          masks: new Map([
+            [0, [{ range: [lowerBound, upperBound] }]],
+            [1, [{ range: [lowerBound, upperBound] }]],
+            [2, [{ range: [lowerBound, upperBound] }]],
+            [3, [{ range: [lowerBound, upperBound] }]],
+            [4, [{ range: [lowerBound, upperBound] }]]
+          ])
+        },
+        {
+          // Step 2: Full range, no masks
+          masks: new Map()
+        }
+      ],
+      repeat: true
+    };
+    
+    this.orchestrator.loadPattern(newPattern);
+  }
+
   dispose(): void {
     if (this.orchestrator) {
       this.orchestrator.dispose();
