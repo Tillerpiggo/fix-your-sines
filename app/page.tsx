@@ -7,7 +7,8 @@ import BandwidthSlider from '../components/BandwidthSlider';
 import PanCountSlider from '../components/PanCountSlider';
 import StaggerDelaySlider from '../components/StaggerDelaySlider';
 import FrequencyCountSlider from '../components/FrequencyCountSlider';
-import { AudioController } from '../lib/controllers/AudioController';
+import AudioModeToggle from '../components/AudioModeToggle';
+import { AudioController, AudioMode } from '../lib/controllers/AudioController';
 import styles from './page.module.css';
 
 export default function Home() {
@@ -18,6 +19,7 @@ export default function Home() {
   const [panCount, setPanCount] = useState(1); // Default to mono
   const [staggerDelay, setStaggerDelay] = useState(50); // Default 50ms
   const [frequencyCount, setFrequencyCount] = useState(100); // Default 100 frequencies
+  const [audioMode, setAudioMode] = useState<AudioMode>('noise'); // Default to noise mode
 
   useEffect(() => {
     const audioController = new AudioController();
@@ -69,12 +71,23 @@ export default function Home() {
       controller.updateFrequencyCount(count);
     }
   };
+  
+  const handleAudioModeChange = (mode: AudioMode) => {
+    setAudioMode(mode);
+    if (controller) {
+      controller.setAudioMode(mode);
+    }
+  };
 
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <h1>Sine Tone Burst Player</h1>
-        <p>Playing -4.5dB/oct pattern (40Hz-14kHz) with masked band rotating across stereo field</p>
+        <h1>Audio Burst Player</h1>
+        <p>Playing -4.5dB/oct pattern (40Hz-14kHz) with frequency notches</p>
+        <AudioModeToggle 
+          value={audioMode} 
+          onChange={handleAudioModeChange}
+        />
         <FrequencySlider 
           value={centerFrequency} 
           onChange={handleFrequencyChange}

@@ -1,11 +1,16 @@
 import { BurstOrchestrator } from '../audio/BurstOrchestrator';
+import { NoiseOrchestrator } from '../audio/NoiseOrchestrator';
 import { BurstPattern } from '../types/audio';
 import { generateBaseFrequencies } from '../../config/defaultPattern';
+
+export type AudioMode = 'tone' | 'noise';
 
 export class AudioController {
   private audioContext: AudioContext | null = null;
   private orchestrator: BurstOrchestrator | null = null;
+  private noiseOrchestrator: NoiseOrchestrator | null = null;
   private isPlaying = false;
+  private audioMode: AudioMode = 'noise'; // Default to noise mode for testing
   private currentMaskCenter = 2500; // Default center frequency
   private currentBandwidth = 0.58; // Default bandwidth in octaves (roughly 2-3kHz)
   private currentPanCount = 1; // Default to mono for debugging
@@ -22,10 +27,13 @@ export class AudioController {
       }
 
       this.orchestrator = new BurstOrchestrator(this.audioContext);
+      this.noiseOrchestrator = new NoiseOrchestrator(this.audioContext);
       this.setupPanning();
       
       // Configure with default settings
       const frequencies = generateBaseFrequencies(40, 14000, this.currentFrequencyCount);
+      
+      // Configure tone orchestrator
       this.orchestrator.setBaseFrequencies(frequencies);
       this.orchestrator.setBurstParams({
         attackTime: 75,  // Increased to 75ms for much smoother onset
@@ -35,12 +43,24 @@ export class AudioController {
       });
       this.orchestrator.setStepDelay(500);
       this.orchestrator.setStaggerDelay(this.currentStaggerDelay);
+      
+      // Configure noise orchestrator
+      this.noiseOrchestrator.setBaseFrequencies(frequencies);
+      this.noiseOrchestrator.setBurstParams({
+        attackTime: 75,
+        releaseTime: 100,
+        spectralSlope: -4.5,
+        volume: 0.5
+      });
+      this.noiseOrchestrator.setStepDelay(500);
+      this.noiseOrchestrator.setStaggerDelay(this.currentStaggerDelay);
+      
       this.updateMaskPattern();
     }
   }
   
   private setupPanning(): void {
-    if (!this.orchestrator) return;
+    if (!this.orchestrator || !this.noiseOrchestrator) return;
     
     const panPositions: number[] = [];
     if (this.currentPanCount === 1) {
@@ -54,18 +74,27 @@ export class AudioController {
     }
     
     this.orchestrator.setupBursts(panPositions);
+    this.noiseOrchestrator.setupBursts(panPositions);
   }
 
   async togglePlayback(): Promise<void> {
     await this.initializeAudio();
     
-    if (!this.orchestrator) return;
+    if (!this.orchestrator || !this.noiseOrchestrator) return;
 
     if (this.isPlaying) {
-      this.orchestrator.stop();
+      if (this.audioMode === 'noise') {
+        this.noiseOrchestrator.stop();
+      } else {
+        this.orchestrator.stop();
+      }
       this.isPlaying = false;
     } else {
-      this.orchestrator.play();
+      if (this.audioMode === 'noise') {
+        this.noiseOrchestrator.play();
+      } else {
+        this.orchestrator.play();
+      }
       this.isPlaying = true;
     }
   }
@@ -88,6 +117,34 @@ export class AudioController {
   }): void {
     if (this.orchestrator) {
       this.orchestrator.setBurstParams(params);
+    }
+    if (this.noiseOrchestrator) {
+      this.noiseOrchestrator.setBurstParams(params);
+    }
+  }
+  
+  setAudioMode(mode: AudioMode): void {
+    const wasPlaying = this.isPlaying;
+    
+    // Stop current playback
+    if (wasPlaying) {
+      if (this.audioMode === 'noise') {
+        this.noiseOrchestrator?.stop();
+      } else {
+        this.orchestrator?.stop();
+      }
+    }
+    
+    // Switch mode
+    this.audioMode = mode;
+    
+    // Resume playback if was playing
+    if (wasPlaying) {
+      if (mode === 'noise') {
+        this.noiseOrchestrator?.play();
+      } else {
+        this.orchestrator?.play();
+      }
     }
   }
 
@@ -121,13 +178,19 @@ export class AudioController {
     if (this.orchestrator) {
       this.orchestrator.setStaggerDelay(delay);
     }
+    if (this.noiseOrchestrator) {
+      this.noiseOrchestrator.setStaggerDelay(delay);
+    }
   }
   
   updateFrequencyCount(count: number): void {
     this.currentFrequencyCount = count;
+    const frequencies = generateBaseFrequencies(40, 14000, count);
     if (this.orchestrator) {
-      const frequencies = generateBaseFrequencies(40, 14000, count);
       this.orchestrator.setBaseFrequencies(frequencies);
+    }
+    if (this.noiseOrchestrator) {
+      this.noiseOrchestrator.setBaseFrequencies(frequencies);
     }
   }
 
@@ -183,6 +246,10 @@ export class AudioController {
     if (this.orchestrator) {
       this.orchestrator.dispose();
       this.orchestrator = null;
+    }
+    if (this.noiseOrchestrator) {
+      this.noiseOrchestrator.dispose();
+      this.noiseOrchestrator = null;
     }
     if (this.audioContext) {
       this.audioContext.close();
