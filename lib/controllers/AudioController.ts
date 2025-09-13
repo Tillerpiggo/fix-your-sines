@@ -28,7 +28,7 @@ export class AudioController {
       const frequencies = generateBaseFrequencies(40, 14000, this.currentFrequencyCount);
       this.orchestrator.setBaseFrequencies(frequencies);
       this.orchestrator.setBurstParams({
-        attackTime: 30,  // Increased from 10ms to 30ms for smoother onset
+        attackTime: 75,  // Increased to 75ms for much smoother onset
         releaseTime: 100,
         spectralSlope: -4.5,
         volume: 0.5
