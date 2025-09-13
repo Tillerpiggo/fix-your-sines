@@ -5,6 +5,11 @@ import { generateBaseFrequencies } from '../../config/defaultPattern';
 
 export type AudioMode = 'tone' | 'bandpassed-noise';
 
+export interface SoundstagePosition {
+  panIndex: number;
+  frequency: number;
+}
+
 export class AudioController {
   private audioContext: AudioContext | null = null;
   private orchestrator: BurstOrchestrator | null = null;
@@ -12,10 +17,12 @@ export class AudioController {
   private audioMode: AudioMode = 'bandpassed-noise'; // Default to noise for testing
   private isPlaying = false;
   private currentMaskCenter = 500; // Default center frequency (500Hz for testing)
-  private currentBandwidth = 0.58; // Default bandwidth in octaves (roughly 2-3kHz)
+  private currentBandwidth = 2.0; // Default bandwidth in octaves (wider notch)
   private currentPanCount = 1; // Default to mono for debugging
   private currentStaggerDelay = 50; // Default stagger delay
   private currentFrequencyCount = 100; // Default frequency count
+  private customPositions: SoundstagePosition[] | null = null;
+  private useCustomPattern = false;
 
   private async initializeAudio(): Promise<void> {
     if (!this.audioContext) {
@@ -53,7 +60,7 @@ export class AudioController {
       this.noiseOrchestrator.setStepDelay(500);
       this.noiseOrchestrator.setStaggerDelay(this.currentStaggerDelay);
       
-      this.updateMaskPattern();
+      this.updatePattern();
     }
   }
   
@@ -126,12 +133,6 @@ export class AudioController {
     return this.isPlaying;
   }
 
-  updatePattern(pattern: BurstPattern): void {
-    if (this.orchestrator) {
-      this.orchestrator.loadPattern(pattern);
-    }
-  }
-
   updateBurstParams(params: {
     attackTime?: number;
     releaseTime?: number;
@@ -148,12 +149,12 @@ export class AudioController {
 
   updateMaskCenterFrequency(centerFreq: number): void {
     this.currentMaskCenter = centerFreq;
-    this.updateMaskPattern();
+    this.updatePattern();
   }
 
   updateMaskBandwidth(bandwidth: number): void {
     this.currentBandwidth = bandwidth;
-    this.updateMaskPattern();
+    this.updatePattern();
   }
   
   updatePanCount(count: number): void {
@@ -169,7 +170,7 @@ export class AudioController {
         }
       }
       this.setupPanning();
-      this.updateMaskPattern();
+      this.updatePattern();
       if (wasPlaying) {
         // Restart the currently active orchestrator based on mode
         if (this.audioMode === 'bandpassed-noise') {
@@ -200,6 +201,77 @@ export class AudioController {
     if (this.noiseOrchestrator) {
       this.noiseOrchestrator.setBaseFrequencies(frequencies);
     }
+  }
+
+  setCustomPositions(positions: SoundstagePosition[]): void {
+    this.customPositions = positions;
+    this.useCustomPattern = true;
+    this.updatePattern();
+  }
+
+  clearCustomPositions(): void {
+    this.customPositions = null;
+    this.useCustomPattern = false;
+    this.updateMaskPattern();
+  }
+
+  private updatePattern(): void {
+    if (this.useCustomPattern && this.customPositions) {
+      this.updateCustomPattern();
+    } else {
+      this.updateMaskPattern();
+    }
+  }
+
+  private updateCustomPattern(): void {
+    if (!this.orchestrator || !this.noiseOrchestrator || !this.customPositions) return;
+
+    const steps = [];
+    
+    // Create a pattern that cycles through each position
+    this.customPositions.forEach(position => {
+      const masks = new Map();
+      
+      // Calculate mask bounds for this position's frequency
+      const halfBandwidth = this.currentBandwidth / 2;
+      const lowerBound = position.frequency / Math.pow(2, halfBandwidth);
+      const upperBound = position.frequency * Math.pow(2, halfBandwidth);
+      
+      // Create masks for all pan positions
+      for (let i = 0; i < this.currentPanCount; i++) {
+        if (i === position.panIndex) {
+          // This position plays unmasked
+          masks.set(i, []);
+        } else {
+          // Other positions are masked
+          masks.set(i, [{ range: [lowerBound, upperBound] }]);
+        }
+      }
+      
+      steps.push({ masks });
+    });
+
+    // Add a step where all positions are masked (creates rhythm)
+    if (steps.length > 0) {
+      const allMasked = new Map();
+      const centerFreq = this.customPositions[0].frequency;
+      const halfBandwidth = this.currentBandwidth / 2;
+      const lowerBound = centerFreq / Math.pow(2, halfBandwidth);
+      const upperBound = centerFreq * Math.pow(2, halfBandwidth);
+      
+      for (let i = 0; i < this.currentPanCount; i++) {
+        allMasked.set(i, [{ range: [lowerBound, upperBound] }]);
+      }
+      steps.push({ masks: allMasked });
+    }
+
+    const newPattern: BurstPattern = {
+      steps,
+      repeat: true
+    };
+
+    this.orchestrator.loadPattern(newPattern);
+    this.noiseOrchestrator.loadPattern(newPattern);
   }
 
   private updateMaskPattern(): void {

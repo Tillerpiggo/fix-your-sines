@@ -8,18 +8,20 @@ import PanCountSlider from '../components/PanCountSlider';
 import StaggerDelaySlider from '../components/StaggerDelaySlider';
 import FrequencyCountSlider from '../components/FrequencyCountSlider';
 import AudioModeSelector from '../components/AudioModeSelector';
-import { AudioController, AudioMode } from '../lib/controllers/AudioController';
+import SoundstageExplorer from '../components/SoundstageExplorer';
+import { AudioController, AudioMode, SoundstagePosition } from '../lib/controllers/AudioController';
 import styles from './page.module.css';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [controller, setController] = useState<AudioController | null>(null);
   const [centerFrequency, setCenterFrequency] = useState(500); // Default to 500Hz center
-  const [bandwidth, setBandwidth] = useState(0.58); // Default bandwidth in octaves
+  const [bandwidth, setBandwidth] = useState(2.0); // Default bandwidth in octaves (wider notch)
   const [panCount, setPanCount] = useState(1); // Default to mono
   const [staggerDelay, setStaggerDelay] = useState(50); // Default 50ms
   const [frequencyCount, setFrequencyCount] = useState(100); // Default 100 frequencies
   const [audioMode, setAudioMode] = useState<AudioMode>('bandpassed-noise'); // Default to noise for testing
+  const [showSoundstage, setShowSoundstage] = useState(false);
 
   useEffect(() => {
     const audioController = new AudioController();
@@ -79,6 +81,18 @@ export default function Home() {
     }
   };
 
+  const handleSoundstagePositionsChange = (positions: { panIndex: number; frequency: number }[]) => {
+    if (controller && positions.length > 0) {
+      const soundstagePositions: SoundstagePosition[] = positions.map(pos => ({
+        panIndex: pos.panIndex,
+        frequency: pos.frequency
+      }));
+      controller.setCustomPositions(soundstagePositions);
+    } else if (controller) {
+      controller.clearCustomPositions();
+    }
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -98,7 +112,7 @@ export default function Home() {
           value={bandwidth}
           onChange={handleBandwidthChange}
           min={0.1}
-          max={2.0}
+          max={4.0}
         />
         <PanCountSlider
           value={panCount}
@@ -119,6 +133,31 @@ export default function Home() {
           max={500}
         />
         <PlayButton isPlaying={isPlaying} onToggle={handleToggle} />
+        
+        <div style={{ marginTop: '20px' }}>
+          <button 
+            onClick={() => setShowSoundstage(!showSoundstage)}
+            style={{
+              padding: '10px 20px',
+              background: showSoundstage ? '#4CAF50' : '#333',
+              color: 'white',
+              border: '1px solid #555',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            {showSoundstage ? 'Hide' : 'Show'} Soundstage Explorer
+          </button>
+        </div>
+
+        {showSoundstage && (
+          <SoundstageExplorer
+            panCount={panCount}
+            minFreq={100}
+            maxFreq={10000}
+            onPositionsChange={handleSoundstagePositionsChange}
+          />
+        )}
       </main>
     </div>
   );
