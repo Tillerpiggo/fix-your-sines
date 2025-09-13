@@ -66,15 +66,20 @@ export class ToneBurst {
   }
 
   private initializeOscillators(count: number): void {
+    const now = this.audioContext.currentTime;
+    
     for (let i = 0; i < count; i++) {
       const oscillator = this.audioContext.createOscillator();
       const gainNode = this.audioContext.createGain();
       
       oscillator.type = 'sine';
+      
       oscillator.connect(gainNode);
       gainNode.connect(this.envelopeGain);
       
-      oscillator.start();
+      // Start each oscillator at a slightly different time to randomize phase
+      const randomDelay = Math.random() * 0.001; // Up to 1ms random delay
+      oscillator.start(now + randomDelay);
       
       this.oscillators.push(oscillator);
       this.oscillatorGains.push(gainNode);

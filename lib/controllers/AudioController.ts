@@ -1,6 +1,6 @@
 import { BurstOrchestrator } from '../audio/BurstOrchestrator';
 import { BurstPattern } from '../types/audio';
-import { baseFrequencies, defaultPattern } from '../../config/defaultPattern';
+import { generateBaseFrequencies } from '../../config/defaultPattern';
 
 export class AudioController {
   private audioContext: AudioContext | null = null;
@@ -8,6 +8,9 @@ export class AudioController {
   private isPlaying = false;
   private currentMaskCenter = 2500; // Default center frequency
   private currentBandwidth = 0.58; // Default bandwidth in octaves (roughly 2-3kHz)
+  private currentPanCount = 1; // Default to mono for debugging
+  private currentStaggerDelay = 50; // Default stagger delay
+  private currentFrequencyCount = 100; // Default frequency count
 
   private async initializeAudio(): Promise<void> {
     if (!this.audioContext) {
@@ -18,22 +21,39 @@ export class AudioController {
         await this.audioContext.resume();
       }
 
-      // Set up orchestrator with 5 bursts panned evenly from full left to full right
       this.orchestrator = new BurstOrchestrator(this.audioContext);
-      this.orchestrator.setupBursts([-1, -0.5, 0, 0.5, 1]);
+      this.setupPanning();
       
       // Configure with default settings
-      this.orchestrator.setBaseFrequencies(baseFrequencies);
+      const frequencies = generateBaseFrequencies(40, 14000, this.currentFrequencyCount);
+      this.orchestrator.setBaseFrequencies(frequencies);
       this.orchestrator.setBurstParams({
-        attackTime: 10,
+        attackTime: 30,  // Increased from 10ms to 30ms for smoother onset
         releaseTime: 100,
         spectralSlope: -4.5,
         volume: 0.5
       });
       this.orchestrator.setStepDelay(500);
-      this.orchestrator.setStaggerDelay(20);
-      this.orchestrator.loadPattern(defaultPattern);
+      this.orchestrator.setStaggerDelay(this.currentStaggerDelay);
+      this.updateMaskPattern();
     }
+  }
+  
+  private setupPanning(): void {
+    if (!this.orchestrator) return;
+    
+    const panPositions: number[] = [];
+    if (this.currentPanCount === 1) {
+      panPositions.push(0); // Center only
+    } else {
+      for (let i = 0; i < this.currentPanCount; i++) {
+        // Evenly distribute from -1 to 1
+        const position = -1 + (2 * i / (this.currentPanCount - 1));
+        panPositions.push(position);
+      }
+    }
+    
+    this.orchestrator.setupBursts(panPositions);
   }
 
   async togglePlayback(): Promise<void> {
@@ -80,6 +100,36 @@ export class AudioController {
     this.currentBandwidth = bandwidth;
     this.updateMaskPattern();
   }
+  
+  updatePanCount(count: number): void {
+    this.currentPanCount = count;
+    if (this.orchestrator) {
+      const wasPlaying = this.isPlaying;
+      if (wasPlaying) {
+        this.orchestrator.stop();
+      }
+      this.setupPanning();
+      this.updateMaskPattern();
+      if (wasPlaying) {
+        this.orchestrator.play();
+      }
+    }
+  }
+  
+  updateStaggerDelay(delay: number): void {
+    this.currentStaggerDelay = delay;
+    if (this.orchestrator) {
+      this.orchestrator.setStaggerDelay(delay);
+    }
+  }
+  
+  updateFrequencyCount(count: number): void {
+    this.currentFrequencyCount = count;
+    if (this.orchestrator) {
+      const frequencies = generateBaseFrequencies(40, 14000, count);
+      this.orchestrator.setBaseFrequencies(frequencies);
+    }
+  }
 
   private updateMaskPattern(): void {
     if (!this.orchestrator) return;
@@ -89,23 +139,40 @@ export class AudioController {
     const lowerBound = this.currentMaskCenter / Math.pow(2, halfBandwidth);
     const upperBound = this.currentMaskCenter * Math.pow(2, halfBandwidth);
     
-    const newPattern: BurstPattern = {
-      steps: [
-        {
-          // Step 1: Exclude the frequency band for all bursts
-          masks: new Map([
-            [0, [{ range: [lowerBound, upperBound] }]],
-            [1, [{ range: [lowerBound, upperBound] }]],
-            [2, [{ range: [lowerBound, upperBound] }]],
-            [3, [{ range: [lowerBound, upperBound] }]],
-            [4, [{ range: [lowerBound, upperBound] }]]
-          ])
-        },
-        {
-          // Step 2: Full range, no masks
-          masks: new Map()
+    const steps = [];
+    
+    if (this.currentPanCount === 1) {
+      // Simple alternating pattern for mono
+      steps.push({
+        masks: new Map([[0, [{ range: [lowerBound, upperBound] }]]])
+      });
+      steps.push({
+        masks: new Map()
+      });
+    } else {
+      // First, all positions exclude the masked band
+      const allExclude = new Map();
+      for (let i = 0; i < this.currentPanCount; i++) {
+        allExclude.set(i, [{ range: [lowerBound, upperBound] }]);
+      }
+      steps.push({ masks: allExclude });
+      
+      // Then rotating pattern: one position at a time plays full range
+      for (let i = 0; i < this.currentPanCount; i++) {
+        const masks = new Map();
+        for (let j = 0; j < this.currentPanCount; j++) {
+          if (j !== i) {
+            // Other positions still exclude the masked frequencies
+            masks.set(j, [{ range: [lowerBound, upperBound] }]);
+          }
+          // Position i has no mask (plays full range)
         }
-      ],
+        steps.push({ masks });
+      }
+    }
+    
+    const newPattern: BurstPattern = {
+      steps,
       repeat: true
     };
     
