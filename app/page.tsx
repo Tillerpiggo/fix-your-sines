@@ -7,17 +7,19 @@ import BandwidthSlider from '../components/BandwidthSlider';
 import PanCountSlider from '../components/PanCountSlider';
 import StaggerDelaySlider from '../components/StaggerDelaySlider';
 import FrequencyCountSlider from '../components/FrequencyCountSlider';
-import { AudioController } from '../lib/controllers/AudioController';
+import AudioModeSelector from '../components/AudioModeSelector';
+import { AudioController, AudioMode } from '../lib/controllers/AudioController';
 import styles from './page.module.css';
 
 export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [controller, setController] = useState<AudioController | null>(null);
-  const [centerFrequency, setCenterFrequency] = useState(2500); // Default to 2.5kHz center
+  const [centerFrequency, setCenterFrequency] = useState(500); // Default to 500Hz center
   const [bandwidth, setBandwidth] = useState(0.58); // Default bandwidth in octaves
   const [panCount, setPanCount] = useState(1); // Default to mono
   const [staggerDelay, setStaggerDelay] = useState(50); // Default 50ms
   const [frequencyCount, setFrequencyCount] = useState(100); // Default 100 frequencies
+  const [audioMode, setAudioMode] = useState<AudioMode>('bandpassed-noise'); // Default to noise for testing
 
   useEffect(() => {
     const audioController = new AudioController();
@@ -69,12 +71,23 @@ export default function Home() {
       controller.updateFrequencyCount(count);
     }
   };
+  
+  const handleAudioModeChange = (mode: AudioMode) => {
+    setAudioMode(mode);
+    if (controller) {
+      controller.setAudioMode(mode);
+    }
+  };
 
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <h1>Sine Tone Burst Player</h1>
+        <h1>Audio Burst Player</h1>
         <p>Playing -4.5dB/oct pattern (40Hz-14kHz) with masked band rotating across stereo field</p>
+        <AudioModeSelector
+          value={audioMode}
+          onChange={handleAudioModeChange}
+        />
         <FrequencySlider 
           value={centerFrequency} 
           onChange={handleFrequencyChange}
