@@ -159,7 +159,7 @@ export class BandpassedNoiseBurst {
     return buffer;
   }
 
-  setParams(params: BurstParams, maskBounds?: {lower: number, upper: number}): void {
+  setParams(params: BurstParams, maskBounds?: {lower: number, upper: number}[]): void {
     // Clean up previous setup
     this.cleanup();
     
@@ -171,25 +171,31 @@ export class BandpassedNoiseBurst {
     // Clear old filters
     this.filters = [];
     
-    if (!maskBounds) {
+    if (!maskBounds || maskBounds.length === 0) {
       // No mask = full spectrum noise, no filtering needed
       this.noiseSource.connect(this.envelopeGain);
     } else {
-      // Masked mode: Use a notch filter to remove the mask region
-      const { lower, upper } = maskBounds;
-      const centerFreq = Math.sqrt(lower * upper); // Geometric mean for center
-      const Q = centerFreq / (upper - lower); // Q factor for the notch width
+      // Masked mode: Chain multiple notch filters for each mask region
+      let lastNode: AudioNode = this.noiseSource;
       
-      // Create a notch filter (band-reject)
-      const notchFilter = this.audioContext.createBiquadFilter();
-      notchFilter.type = 'notch';
-      notchFilter.frequency.value = centerFreq;
-      notchFilter.Q.value = Math.min(Q, 20); // Cap Q to prevent instability
+      maskBounds.forEach(({ lower, upper }) => {
+        const centerFreq = Math.sqrt(lower * upper); // Geometric mean for center
+        const Q = centerFreq / (upper - lower); // Q factor for the notch width
+        
+        // Create a notch filter (band-reject)
+        const notchFilter = this.audioContext.createBiquadFilter();
+        notchFilter.type = 'notch';
+        notchFilter.frequency.value = centerFreq;
+        notchFilter.Q.value = Math.min(Q, 20); // Cap Q to prevent instability
+        
+        lastNode.connect(notchFilter);
+        lastNode = notchFilter;
+        
+        this.filters.push(notchFilter);
+      });
       
-      this.noiseSource.connect(notchFilter);
-      notchFilter.connect(this.envelopeGain);
-      
-      this.filters.push(notchFilter);
+      // Connect the last filter to the envelope
+      lastNode.connect(this.envelopeGain);
     }
     
     // Start the noise source

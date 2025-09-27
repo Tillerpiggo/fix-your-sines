@@ -9,6 +9,8 @@ import StaggerDelaySlider from '../components/StaggerDelaySlider';
 import FrequencyCountSlider from '../components/FrequencyCountSlider';
 import AudioModeSelector from '../components/AudioModeSelector';
 import SoundstageExplorer from '../components/SoundstageExplorer';
+import SpeedSlider from '../components/SpeedSlider';
+import AttackSlider from '../components/AttackSlider';
 import { AudioController, AudioMode, SoundstagePosition } from '../lib/controllers/AudioController';
 import styles from './page.module.css';
 
@@ -22,6 +24,8 @@ export default function Home() {
   const [frequencyCount, setFrequencyCount] = useState(100); // Default 100 frequencies
   const [audioMode, setAudioMode] = useState<AudioMode>('bandpassed-noise'); // Default to noise for testing
   const [showSoundstage, setShowSoundstage] = useState(false);
+  const [speed, setSpeed] = useState(200); // Default 200ms between steps
+  const [attackTime, setAttackTime] = useState(50); // Default 50ms attack
 
   useEffect(() => {
     const audioController = new AudioController();
@@ -93,6 +97,20 @@ export default function Home() {
     }
   };
 
+  const handleSpeedChange = (newSpeed: number) => {
+    setSpeed(newSpeed);
+    if (controller) {
+      controller.updateSpeed(newSpeed);
+    }
+  };
+
+  const handleAttackChange = (newAttack: number) => {
+    setAttackTime(newAttack);
+    if (controller) {
+      controller.updateBurstParams({ attackTime: newAttack });
+    }
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -132,6 +150,18 @@ export default function Home() {
           min={10}
           max={500}
         />
+        <SpeedSlider
+          value={speed}
+          onChange={handleSpeedChange}
+          min={50}
+          max={2000}
+        />
+        <AttackSlider
+          value={attackTime}
+          onChange={handleAttackChange}
+          min={2}
+          max={200}
+        />
         <PlayButton isPlaying={isPlaying} onToggle={handleToggle} />
         
         <div style={{ marginTop: '20px' }}>
@@ -153,8 +183,8 @@ export default function Home() {
         {showSoundstage && (
           <SoundstageExplorer
             panCount={panCount}
-            minFreq={100}
-            maxFreq={10000}
+            minFreq={20}
+            maxFreq={20000}
             onPositionsChange={handleSoundstagePositionsChange}
           />
         )}

@@ -38,22 +38,11 @@ export default function SoundstageExplorer({
     return Math.exp(logFreq);
   }, [minFreq, maxFreq]);
 
-  // Initialize with one position per pan slot
+  // Clear positions when pan count changes
   useEffect(() => {
-    const initialPositions: Position[] = [];
-    for (let i = 0; i < panCount; i++) {
-      const x = (i + 0.5) / panCount; // Center of each slot
-      const y = 0.5; // Middle frequency
-      initialPositions.push({
-        id: `pos-${i}`,
-        x,
-        y,
-        panIndex: i,
-        frequency: calculateFrequency(y)
-      });
-    }
-    setPositions(initialPositions);
-  }, [panCount, calculateFrequency]);
+    // Start with empty positions - let user place them
+    setPositions([]);
+  }, [panCount]);
 
 
   // Notify parent of position changes
@@ -110,6 +99,9 @@ export default function SoundstageExplorer({
 
   const handleCanvasClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!canvasRef.current || draggingId) return;
+    
+    // Only add new dot if Shift key is held
+    if (!e.shiftKey) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -119,20 +111,15 @@ export default function SoundstageExplorer({
     const panIndex = getPanIndex(x);
     const snappedX = getXForPanIndex(panIndex);
 
-    // Check if there's already a position in this slot
-    const existingPos = positions.find(p => p.panIndex === panIndex);
-    
-    if (!existingPos) {
-      // Add new position
-      const newPosition: Position = {
-        id: `pos-${Date.now()}`,
-        x: snappedX,
-        y,
-        panIndex,
-        frequency: calculateFrequency(y)
-      };
-      setPositions(prev => [...prev, newPosition]);
-    }
+    // Allow multiple positions per slot - just add the new one
+    const newPosition: Position = {
+      id: `pos-${Date.now()}-${Math.random()}`,
+      x: snappedX,
+      y,
+      panIndex,
+      frequency: calculateFrequency(y)
+    };
+    setPositions(prev => [...prev, newPosition]);
   };
 
   const handleRemovePosition = (positionId: string) => {
@@ -144,7 +131,7 @@ export default function SoundstageExplorer({
       <div className={styles.header}>
         <h3>Soundstage Explorer</h3>
         <p className={styles.instructions}>
-          Click to add positions • Drag vertically to adjust frequency • Right-click to remove
+          Shift+click to add positions • Drag vertically to adjust frequency • Right-click to remove
         </p>
       </div>
       

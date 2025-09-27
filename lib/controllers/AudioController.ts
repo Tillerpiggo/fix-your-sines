@@ -41,23 +41,23 @@ export class AudioController {
       const frequencies = generateBaseFrequencies(40, 14000, this.currentFrequencyCount);
       this.orchestrator.setBaseFrequencies(frequencies);
       this.orchestrator.setBurstParams({
-        attackTime: 100,  // 100ms attack time
+        attackTime: 50,  // 50ms attack time
         releaseTime: 100,
         spectralSlope: -4.5,
         volume: 0.5
       });
-      this.orchestrator.setStepDelay(500);
+      this.orchestrator.setStepDelay(200);
       this.orchestrator.setStaggerDelay(this.currentStaggerDelay);
       
       // Configure noise orchestrator
       this.noiseOrchestrator.setBaseFrequencies(frequencies);
       this.noiseOrchestrator.setBurstParams({
-        attackTime: 100,  // 100ms attack time
+        attackTime: 50,  // 50ms attack time
         releaseTime: 100,
         spectralSlope: -4.5,
         volume: 1.0  // Max volume for noise
       });
-      this.noiseOrchestrator.setStepDelay(500);
+      this.noiseOrchestrator.setStepDelay(200);
       this.noiseOrchestrator.setStaggerDelay(this.currentStaggerDelay);
       
       this.updatePattern();
@@ -156,7 +156,16 @@ export class AudioController {
     this.currentBandwidth = bandwidth;
     this.updatePattern();
   }
-  
+
+  updateSpeed(speed: number): void {
+    if (this.orchestrator) {
+      this.orchestrator.setStepDelay(speed);
+    }
+    if (this.noiseOrchestrator) {
+      this.noiseOrchestrator.setStepDelay(speed);
+    }
+  }
+
   updatePanCount(count: number): void {
     this.currentPanCount = count;
     if (this.orchestrator || this.noiseOrchestrator) {
@@ -228,42 +237,44 @@ export class AudioController {
 
     const steps = [];
     
-    // Create a pattern that cycles through each position
-    this.customPositions.forEach(position => {
-      const masks = new Map();
-      
-      // Calculate mask bounds for this position's frequency
+    // Sort all positions by pan index, then by frequency for consistent ordering
+    const allPositionsSorted = [...this.customPositions].sort((a, b) => {
+      if (a.panIndex !== b.panIndex) {
+        return a.panIndex - b.panIndex;
+      }
+      return a.frequency - b.frequency;
+    });
+    
+    // Calculate all notch ranges
+    const allNotchRanges = allPositionsSorted.map(position => {
       const halfBandwidth = this.currentBandwidth / 2;
       const lowerBound = position.frequency / Math.pow(2, halfBandwidth);
       const upperBound = position.frequency * Math.pow(2, halfBandwidth);
-      
-      // Create masks for all pan positions
-      for (let i = 0; i < this.currentPanCount; i++) {
-        if (i === position.panIndex) {
-          // This position plays unmasked
-          masks.set(i, []);
-        } else {
-          // Other positions are masked
-          masks.set(i, [{ range: [lowerBound, upperBound] }]);
-        }
-      }
-      
-      steps.push({ masks });
+      return { range: [lowerBound, upperBound] };
     });
+    
+    // Create 8-bar pattern: F-N-N-F-N-N-F-N
+    // F = Filled (no notches), N = Notched (all notches active)
 
-    // Add a step where all positions are masked (creates rhythm)
-    if (steps.length > 0) {
-      const allMasked = new Map();
-      const centerFreq = this.customPositions[0].frequency;
-      const halfBandwidth = this.currentBandwidth / 2;
-      const lowerBound = centerFreq / Math.pow(2, halfBandwidth);
-      const upperBound = centerFreq * Math.pow(2, halfBandwidth);
-      
-      for (let i = 0; i < this.currentPanCount; i++) {
-        allMasked.set(i, [{ range: [lowerBound, upperBound] }]);
-      }
-      steps.push({ masks: allMasked });
+    const allFilledMasks = new Map();
+    for (let i = 0; i < this.currentPanCount; i++) {
+      allFilledMasks.set(i, []); // Empty array means no notches
     }
+
+    const allNotchedMasks = new Map();
+    for (let i = 0; i < this.currentPanCount; i++) {
+      allNotchedMasks.set(i, allNotchRanges);
+    }
+
+    // Build the 8-step pattern
+    steps.push({ masks: allFilledMasks });  // Step 1: F
+    steps.push({ masks: allNotchedMasks }); // Step 2: N
+    steps.push({ masks: allNotchedMasks }); // Step 3: N
+    steps.push({ masks: allFilledMasks });  // Step 4: F
+    steps.push({ masks: allNotchedMasks }); // Step 5: N
+    steps.push({ masks: allNotchedMasks }); // Step 6: N
+    steps.push({ masks: allFilledMasks });  // Step 7: F
+    steps.push({ masks: allNotchedMasks }); // Step 8: N
 
     const newPattern: BurstPattern = {
       steps,

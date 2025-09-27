@@ -14,7 +14,7 @@ export class BurstOrchestrator {
   
   // Burst parameters (shared across all bursts)
   private burstParams = {
-    attackTime: 10,
+    attackTime: 30,
     releaseTime: 100,
     spectralSlope: -4.5,
     volume: 0.5

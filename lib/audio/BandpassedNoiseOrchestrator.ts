@@ -14,7 +14,7 @@ export class BandpassedNoiseOrchestrator {
   
   // Burst parameters (shared across all bursts)
   private burstParams = {
-    attackTime: 10,
+    attackTime: 30,
     releaseTime: 100,
     spectralSlope: -4.5,
     volume: 0.5
@@ -85,18 +85,11 @@ export class BandpassedNoiseOrchestrator {
       // Get masks for this burst (if any)
       const masks = step.masks.get(burstIndex) || [];
       
-      // Calculate mask bounds if there are masks
-      let maskBounds: {lower: number, upper: number} | undefined;
-      
-      if (masks.length > 0) {
-        // Use the actual mask bounds from the pattern
-        // The mask defines the region to EXCLUDE (the notch)
-        const mask = masks[0];
-        maskBounds = {
-          lower: mask.range[0],
-          upper: mask.range[1]
-        };
-      }
+      // Convert masks to bounds array for multiple notches
+      const maskBounds = masks.map(mask => ({
+        lower: mask.range[0],
+        upper: mask.range[1]
+      }));
       
       // Set parameters with mask bounds for proper bandpassing
       const params: BurstParams = {
